@@ -47,13 +47,13 @@ impl IsolateRuntimeInstance {
                                 Ok(_) => {}
                                 Err(e) => {
                                     // TODO: What do with errors?
-                                    println!("{:?}", e);
+                                    println!("Failed to send response: {:?}", e);
                                 }
                             }
                         }
                         Err(e) => {
                             // TODO: What do with errors?
-                            println!("{:?}", e);
+                            println!("Handler failed: {:?}", e);
                         }
                     }
                     Ok(()) as Result<(), ()>

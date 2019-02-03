@@ -28,14 +28,8 @@ impl IsolateChannel {
     pub fn send_boxed(&self, message: Box<Any + Send + 'static>) -> impl Future<Item=Option<Box<Any + Send + 'static>>, Error=IsolateChannelError> {
         let (sx, rx) = channel();
         match self.sender.send((message, sx)) {
-            Ok(_) => Either::A(rx.map_err(|c| {
-                println!("Cancelled: {:?}", c);
-                IsolateChannelError::SyncError
-            })),
-            Err(e) => {
-                println!("{:?}", e);
-                Either::B(futures::failed(IsolateChannelError::SyncError))
-            }
+            Ok(_) => Either::A(rx.map_err(|_| IsolateChannelError::SyncError)),
+            Err(_) => Either::B(futures::failed(IsolateChannelError::SyncError))
         }
     }
 }

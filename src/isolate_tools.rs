@@ -26,7 +26,7 @@ impl IsolateTools {
 
     /// Return a failure
     pub fn err_as_future(e: impl Error) -> Box<Future<Item=Option<Box<Any + Send + 'static>>, Error=IsolateError> + Send + 'static> {
-        let err = IsolateError::from(e);
+        let err = IsolateError::from_error(e);
         Box::new(futures::failed(err))
     }
 }
