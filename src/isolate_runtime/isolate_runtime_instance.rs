@@ -5,19 +5,23 @@ use crate::isolate_runtime::IsolateRuntime;
 use futures::sync::oneshot;
 use crate::errors::isolate_runtime_error::IsolateRuntimeError;
 use futures::Future;
+use crate::errors::isolate_error::IsolateError;
+use crate::isolate::IsolateContext;
 
 pub struct IsolateRuntimeInstance {
-    receiver: Receiver<(Box<Any + Send + 'static>, oneshot::Sender<Option<Box<Any + Send + 'static>>>)>,
+    receiver: Receiver<(Box<Any + Send + 'static>, oneshot::Sender<Result<Option<Box<Any + Send + 'static>>, IsolateError>>)>,
     isolate: Box<dyn Isolate + Send + 'static>,
     runtime: IsolateRuntime,
+    identity: String,
 }
 
 impl IsolateRuntimeInstance {
-    pub fn new(receiver: Receiver<(Box<Any + Send + 'static>, oneshot::Sender<Option<Box<Any + Send + 'static>>>)>, isolate: impl Isolate + Send + 'static, runtime: IsolateRuntime) -> IsolateRuntimeInstance {
+    pub fn new(identity: &str, receiver: Receiver<(Box<Any + Send + 'static>, oneshot::Sender<Result<Option<Box<Any + Send + 'static>>, IsolateError>>)>, isolate: impl Isolate + Send + 'static, runtime: IsolateRuntime) -> IsolateRuntimeInstance {
         return IsolateRuntimeInstance {
             receiver,
             isolate: Box::new(isolate),
             runtime,
+            identity: identity.to_string(),
         };
     }
 
@@ -29,6 +33,7 @@ impl IsolateRuntimeInstance {
                     Err(e) => {
                         match e {
                             IsolateRuntimeError::IsolateHalted => { break; }
+                            _ => { /* Do nothing for others */ }
                         }
                     }
                 }
@@ -40,7 +45,7 @@ impl IsolateRuntimeInstance {
     fn event_loop(&self) -> Result<(), IsolateRuntimeError> {
         match self.receiver.recv() {
             Ok((input, response)) => {
-                tokio::spawn(self.isolate.handle(input, &self.runtime).then(move |result| {
+                tokio::spawn(self.isolate.handle(input, self.new_context()).then(move |result| {
                     match result {
                         Ok(output) => {
                             match response.send(output) {
@@ -52,8 +57,13 @@ impl IsolateRuntimeInstance {
                             }
                         }
                         Err(e) => {
-                            // TODO: What do with errors?
-                            println!("Handler failed: {:?}", e);
+                            match response.send(Err(e)) {
+                                Ok(_) => {}
+                                Err(e) => {
+                                    // TODO: What do with errors?
+                                    println!("Failed to send response: {:?}", e);
+                                }
+                            }
                         }
                     }
                     Ok(()) as Result<(), ()>
@@ -61,6 +71,13 @@ impl IsolateRuntimeInstance {
                 Ok(())
             }
             Err(_) => Err(IsolateRuntimeError::IsolateHalted)
+        }
+    }
+
+    fn new_context(&self) -> IsolateContext {
+        IsolateContext {
+            runtime: &self.runtime,
+            identity: self.identity.as_ref(),
         }
     }
 }

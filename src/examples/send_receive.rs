@@ -4,11 +4,12 @@ use futures::future::Future;
 use std::any::Any;
 use crate::errors::isolate_error::IsolateError;
 use crate::IsolateTools;
+use crate::isolate::IsolateContext;
 
 struct Worker1 {}
 
 impl Isolate for Worker1 {
-    fn handle(&self, input: Box<Any + Send + 'static>, _: &IsolateRuntime) -> Box<Future<Item=Option<Box<Any + Send + 'static>>, Error=IsolateError> + Send + 'static> {
+    fn handle(&self, input: Box<Any + Send + 'static>, _: IsolateContext) -> Box<Future<Item=Result<Option<Box<Any + Send + 'static>>, IsolateError>, Error=IsolateError> + Send + 'static> {
         let output = match input.downcast_ref::<String>() {
             Some(s) => self.handle_str(&s),
             None => "No input".to_string()
@@ -35,7 +36,7 @@ fn test_send_message_to_worker() {
         let channel = runtime.connect("worker1").unwrap();
         r.block_on(channel.send("World".to_string()).then(|r| {
             assert!(r.is_ok());
-            assert_eq!(r.unwrap().unwrap().downcast::<String>().unwrap().as_ref(), "Hello World");
+            assert_eq!(r.unwrap().unwrap().unwrap().downcast::<String>().unwrap().as_ref(), "Hello World");
             Ok(()) as Result<(), ()>
         })).unwrap();
     }
@@ -45,7 +46,7 @@ fn test_send_message_to_worker() {
         let channel = runtime.connect("worker1").unwrap();
         r.block_on(channel.send("World2".to_string()).then(|r| {
             assert!(r.is_ok());
-            assert_eq!(r.unwrap().unwrap().downcast::<String>().unwrap().as_ref(), "Hello World2");
+            assert_eq!(r.unwrap().unwrap().unwrap().downcast::<String>().unwrap().as_ref(), "Hello World2");
             Ok(()) as Result<(), ()>
         })).unwrap();
     }

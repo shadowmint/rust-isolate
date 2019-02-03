@@ -7,10 +7,10 @@ use std::collections::HashMap;
 use std::any::Any;
 use crossbeam::channel::Sender;
 use futures::sync::oneshot;
+use crate::errors::isolate_error::IsolateError;
 
 #[derive(Debug)]
 pub enum IsolateChannelError {
-    ConnectionFailed,
     SyncError,
 }
 
@@ -22,8 +22,3 @@ impl Display for IsolateChannelError {
     }
 }
 
-impl From<PoisonError<MutexGuard<'_, HashMap<String, Sender<(Box<dyn Any + Send + 'static>, oneshot::Sender<Option<Box<Any + Send + 'static>>>)>>>>> for IsolateChannelError {
-    fn from(_: PoisonError<MutexGuard<'_, HashMap<String, Sender<(Box<dyn Any + Send + 'static>, oneshot::Sender<Option<Box<Any + Send + 'static>>>)>>>>) -> Self {
-        return IsolateChannelError::SyncError;
-    }
-}

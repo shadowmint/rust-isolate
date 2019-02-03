@@ -10,13 +10,15 @@ use std::sync::Mutex;
 use std::any::Any;
 use std::collections::HashMap;
 use futures::sync::oneshot;
+use crate::errors::isolate_error::IsolateError;
+use crate::errors::isolate_runtime_error::IsolateRuntimeError;
 
 mod isolate_runtime_instance;
 
 /// IsolateRuntime is the base container to managing and communicating with Isolate instances.
 #[derive(Clone)]
 pub struct IsolateRuntime {
-    isolates: Arc<Mutex<HashMap<String, Sender<(Box<Any + Send + 'static>, oneshot::Sender<Option<Box<Any + Send + 'static>>>)>>>>
+    isolates: Arc<Mutex<HashMap<String, Sender<(Box<Any + Send + 'static>, oneshot::Sender<Result<Option<Box<Any + Send + 'static>>, IsolateError>>)>>>>
 }
 
 
@@ -29,14 +31,13 @@ impl IsolateRuntime {
     }
 
     /// Add a new isolate to this runtime
-    pub fn set(&mut self, identity: &str, isolate: impl Isolate + Send + 'static) -> Result<(), IsolateChannelError> {
+    pub fn set(&self, identity: &str, isolate: impl Isolate + Send + 'static) -> Result<(), IsolateRuntimeError> {
         let (sx, rx) = crossbeam::channel::unbounded();
 
         // Spawn a new instance
         let runtime = self.clone();
-        thread::spawn(move || {
-            IsolateRuntimeInstance::new(rx, isolate, runtime).run();
-        });
+        let isolate = IsolateRuntimeInstance::new(identity, rx, isolate, runtime);
+        thread::spawn(move || isolate.run());
 
         // Save the reference to the instance
         let mut isolate_ref = self.isolates.lock()?;
@@ -44,12 +45,20 @@ impl IsolateRuntime {
         Ok(())
     }
 
+    /// Remove an isolate.
+    /// The isolate will remain running until the current event is processed.
+    pub fn halt(&self, identity: &str) -> Result<(), IsolateRuntimeError> {
+        let mut isolate_ref = self.isolates.lock()?;
+        isolate_ref.remove(identity);
+        Ok(())
+    }
+
     /// Open a channel to a named endpoint
-    pub fn connect(&self, identity: &str) -> Result<IsolateChannel, IsolateChannelError> {
+    pub fn connect(&self, identity: &str) -> Result<IsolateChannel, IsolateRuntimeError> {
         let isolate_ref = self.isolates.lock()?;
         match isolate_ref.get(identity) {
             Some(channel) => Ok(IsolateChannel::from(channel)),
-            None => Err(IsolateChannelError::ConnectionFailed)
+            None => Err(IsolateRuntimeError::ConnectionFailed)
         }
     }
 }

@@ -3,6 +3,11 @@ use crate::IsolateRuntime;
 use crate::errors::isolate_error::IsolateError;
 use futures::Future;
 
+pub struct IsolateContext<'a> {
+    pub identity: &'a str,
+    pub runtime: &'a IsolateRuntime,
+}
+
 pub trait Isolate {
-    fn handle(&self, input: Box<Any + Send + 'static>, runtime: &IsolateRuntime) -> Box<dyn Future<Item=Option<Box<Any + Send + 'static>>, Error=IsolateError> + Send + 'static>;
+    fn handle(&self, input: Box<Any + Send + 'static>, context: IsolateContext) -> Box<dyn Future<Item=Result<Option<Box<Any + Send + 'static>>, IsolateError>, Error=IsolateError> + Send + 'static>;
 }

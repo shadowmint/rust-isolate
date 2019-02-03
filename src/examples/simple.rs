@@ -4,11 +4,12 @@ use futures::future::Future;
 use std::any::Any;
 use crate::errors::isolate_error::IsolateError;
 use crate::IsolateTools;
+use crate::isolate::IsolateContext;
 
 struct Worker1 {}
 
 impl Isolate for Worker1 {
-    fn handle(&self, _: Box<Any + Send + 'static>, _: &IsolateRuntime) -> Box<Future<Item=Option<Box<Any + Send + 'static>>, Error=IsolateError> + Send + 'static> {
+    fn handle(&self, _: Box<Any + Send + 'static>, _: IsolateContext) -> Box<Future<Item=Result<Option<Box<Any + Send + 'static>>, IsolateError>, Error=IsolateError> + Send + 'static> {
         IsolateTools::none_as_future()
     }
 }
