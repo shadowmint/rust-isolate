@@ -13,7 +13,7 @@ impl Isolate for Worker1 {
             Some(s) => self.handle_str(&s),
             None => "No input".to_string()
         };
-        IsolateTools::response(Ok(output))
+        IsolateTools::some_as_future(output)
     }
 }
 

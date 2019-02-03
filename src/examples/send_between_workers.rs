@@ -12,11 +12,15 @@ struct Worker1 {}
 
 impl Isolate for Worker1 {
     fn handle(&self, input: Box<Any + Send + 'static>, runtime: &IsolateRuntime) -> Box<Future<Item=Option<Box<Any + Send + 'static>>, Error=IsolateError> + Send + 'static> {
+        println!("Incoming!");
         let channel = runtime.connect("worker2").unwrap();
+        println!("Got channel");
         Box::new(channel.send_boxed(input).then(|r| {
             println!("Got response from worker2");
+            println!("{:?}", r);
             let output_string = r.unwrap().unwrap().downcast::<String>().unwrap().as_ref().to_string();
-            Ok(IsolateTools::some(output_string))
+            println!("Resp: {}", output_string);
+            Ok(IsolateTools::some_as_box(output_string))
         }))
     }
 }
@@ -31,7 +35,7 @@ impl Isolate for Worker2 {
             None => "No input".to_string()
         };
         println!("Worker2 {}", output);
-        IsolateTools::response(Ok(output))
+        IsolateTools::some_as_future(output)
     }
 }
 
@@ -47,16 +51,28 @@ fn test_send_message_to_worker() {
     let mut runtime = IsolateRuntime::new();
 
     runtime.set("worker1", Worker1 {}).unwrap();
+    runtime.set("worker2", Worker2 {}).unwrap();
 
     // Send on message
     let channel = runtime.connect("worker1").unwrap();
-    tokio::run(futures::lazy(move || {
-        channel.send("World".to_string()).then(|r| {
-            assert!(r.is_ok());
-            assert_eq!(r.unwrap().unwrap().downcast::<String>().unwrap().as_ref(), "Hello World");
-            Ok(()) as Result<(), ()>
-        })
+    r.block_on(channel.send("World".to_string()).then(|r| {
+        assert!(r.is_ok());
+        assert_eq!(r.unwrap().unwrap().downcast::<String>().unwrap().as_ref(), "Hello World");
+        Ok(()) as Result<(), ()>
     }));
+}
 
-    thread::sleep(Duration::from_millis(100));
+#[test]
+fn test_send_message_to_worker_fails_with_no_worker() {
+    let mut r = tokio::runtime::Runtime::new().unwrap();
+    let mut runtime = IsolateRuntime::new();
+
+    runtime.set("worker1", Worker1 {}).unwrap();
+
+    // Send on message
+    let channel = runtime.connect("worker1").unwrap();
+    r.block_on(channel.send("World".to_string()).then(|r| {
+        assert!(r.is_err());
+        Ok(()) as Result<(), ()>
+    }));
 }

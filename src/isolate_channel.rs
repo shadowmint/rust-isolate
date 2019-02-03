@@ -25,7 +25,6 @@ impl IsolateChannel {
     }
 
     /// Send an existing boxed value to the worker and get back a future for the processed response.
-    /// This is particularly useful for workers that forward messages.
     pub fn send_boxed(&self, message: Box<Any + Send + 'static>) -> impl Future<Item=Option<Box<Any + Send + 'static>>, Error=IsolateChannelError> {
         let (sx, rx) = channel();
         match self.sender.send((message, sx)) {

@@ -9,7 +9,7 @@ struct Worker1 {}
 
 impl Isolate for Worker1 {
     fn handle(&self, _: Box<Any + Send + 'static>, _: &IsolateRuntime) -> Box<Future<Item=Option<Box<Any + Send + 'static>>, Error=IsolateError> + Send + 'static> {
-        IsolateTools::none()
+        IsolateTools::none_as_future()
     }
 }
 
