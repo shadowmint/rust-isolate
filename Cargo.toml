@@ -1,0 +1,10 @@
+[package]
+name = "rust-isolate"
+version = "0.1.0"
+authors = ["Douglas Linder <linderd@iinet.net.au>"]
+edition = "2018"
+
+[dependencies]
+futures = "0.1"
+crossbeam = "0.7.1"
+tokio = "0.1"
