@@ -8,7 +8,6 @@ mod isolate_tools;
 mod examples;
 
 pub use crate::isolate::Isolate;
+pub use crate::isolate::IsolateContext;
 pub use crate::isolate_tools::IsolateTools;
 pub use crate::isolate_runtime::IsolateRuntime;
-
-
