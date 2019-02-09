@@ -1,13 +1,17 @@
-mod errors;
-mod isolate;
 mod isolate_channel;
+mod isolate;
 mod isolate_runtime;
-mod isolate_tools;
+
+pub use isolate::Isolate;
+pub use isolate_channel::IsolateChannel;
+pub use isolate_runtime::isolate_identity::IsolateIdentity;
+pub use isolate_runtime::isolate_runtime_error::IsolateRuntimeError;
 
 #[cfg(test)]
-mod examples;
+mod tests {
+    #[test]
+    pub fn test_it() {
+        assert!(true);
+    }
+}
 
-pub use crate::isolate::Isolate;
-pub use crate::isolate::IsolateContext;
-pub use crate::isolate_tools::IsolateTools;
-pub use crate::isolate_runtime::IsolateRuntime;

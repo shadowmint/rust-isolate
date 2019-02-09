@@ -1,13 +1,11 @@
-use std::any::Any;
-use crate::IsolateRuntime;
-use crate::errors::isolate_error::IsolateError;
-use futures::Future;
+use crate::IsolateChannel;
+use crate::IsolateIdentity;
+use crate::isolate_runtime::IsolateRuntime;
 
-pub struct IsolateContext<'a> {
-    pub identity: &'a str,
-    pub runtime: &'a IsolateRuntime,
-}
-
-pub trait Isolate {
-    fn handle(&self, input: Box<Any + Send + 'static>, context: IsolateContext) -> Box<dyn Future<Item=Result<Option<Box<Any + Send + 'static>>, IsolateError>, Error=IsolateError> + Send + 'static>;
+/// Isolate the isolate worker that is run in its own thread to process tasks.
+pub trait Isolate<T: Send + 'static> {
+    /// Spawn is invoked when a new connection is opened to the isolate.
+    /// It should return a function that can be invoked in a remote thread.
+    /// The spawn function should handle incoming events on the channel until it closes.
+    fn spawn(&self, identity: IsolateIdentity, channel: IsolateChannel<T>, runtime: &IsolateRuntime) -> Box<Fn() + Send + 'static>;
 }
