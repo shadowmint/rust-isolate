@@ -1,36 +1,179 @@
-use crate::Isolate;
-use std::any::Any;
-use crate::IsolateIdentity;
-use std::collections::HashMap;
-use std::sync::Arc;
-use std::sync::Mutex;
-use crate::IsolateChannel;
-
 pub(crate) mod isolate_identity;
 pub(crate) mod isolate_runtime_error;
-mod isolate_runner;
+pub(crate) mod isolate_runtime_shared;
 
-#[derive(Clone)]
-pub struct IsolateRuntime {
-    inner: Arc<Mutex<IsolateRuntimeInner>>
+use crate::IsolateIdentity;
+use std::any::Any;
+use crate::Isolate;
+use crate::IsolateChannel;
+use crate::IsolateRuntimeError;
+use std::thread;
+use std::thread::JoinHandle;
+use std::collections::HashMap;
+use crate::isolate_runtime::IsolateRuntime;
+
+pub struct IsolateRef<T: Send + 'static> {
+    channel: IsolateChannel<T>,
+    handle: JoinHandle<()>,
 }
 
-pub struct IsolateRuntimeInner {
-    runners: HashMap<IsolateIdentity, Box<Any>>
+pub struct IsolateRunner<T: Send + 'static, TState: Send + 'static> {
+    isolate: Box<Isolate<T> + 'static>,
+    shared: Arc<Mutex<IsolateRuntimeSharedState<TState>>>,
 }
 
-impl IsolateRuntime {
-    pub fn new() -> IsolateRuntime {
-        IsolateRuntime {
-            inner: Arc::new(Mutex::new(IsolateRuntimeInner {
-                runners: HashMap::new()
-            }))
+
+impl<T: Clone + Send + 'static, TState: Send + 'static> IsolateRunner<T, TState> {
+    /// Create a new runner with a specific isolate instance
+    pub fn new(isolate: impl Isolate<T> + 'static) -> IsolateRunner<T, TState> {
+        IsolateRunner {
+            isolate: Box::new(isolate),
+            shared: IsolateRuntimeSharedState::<TState>::new(),
         }
     }
 
-    pub fn set<T>(&self, isolate_identity: &str, isolate: impl Isolate<T> + Send + 'static) -> Result<(), ()> {}
+    /// Spawn a new isolate worker thread and run it
+    pub fn spawn(&mut self) -> Result<IsolateChannel<T>, IsolateRuntimeError> {
+        let (ref_channel, worker_channel) = IsolateChannel::<T>::new();
 
-    pub fn halt(&self, isolate_identity: &str) -> Result<(), ()> {}
+        // Handle worker
+        let worker_identity = IsolateIdentity::new();
+        let worker = self.isolate.spawn(worker_identity.clone(), worker_channel, &self.runtime);
+        let handle = thread::spawn(move || {
+            (worker)();
+        });
 
-    pub fn find<T>(&self, isolate_identity: &str, identity: IsolateIdentity) -> Result<IsolateChannel<T>, ()> {}
+        // Keep reference
+        let consumer_channel = ref_channel.clone().unwrap();
+        self.refs.insert(worker_identity, IsolateRef { channel: ref_channel, handle });
+
+        return Ok(consumer_channel);
+    }
+
+    /// Halt this runner and wait for all its workers to shutdown
+    pub fn halt(self) {
+        self.refs.into_iter().for_each(|(_, r)| {
+            r.channel.close();
+            r.handle.join();
+        });
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::IsolateRunner;
+    use crate::Isolate;
+    use crate::IsolateChannel;
+    use crate::IsolateIdentity;
+
+    struct TestIsolate {}
+
+    #[derive(Debug, Clone)]
+    enum TestIsolateEvent {
+        Open,
+        Who,
+        Identity(IsolateIdentity),
+        Peer(IsolateIdentity),
+        PeerGot,
+        Close,
+    }
+
+    impl Isolate<TestIsolateEvent> for TestIsolate {
+        fn spawn(&self, identity: IsolateIdentity, channel: IsolateChannel<TestIsolateEvent>, runtime: &IsolateRuntime) -> Box<Fn() + Send + 'static> {
+            let r = runtime.clone();
+            Box::new(move || {
+                match channel.receiver.recv() {
+                    Ok(v) => {
+                        println!("Got: {:?}", v);
+                        match v {
+                            TestIsolateEvent::Who => {
+                                println!("Identity resp?");
+                                channel.sender.send(TestIsolateEvent::Identity(identity));
+                            }
+                            TestIsolateEvent::Peer(id) => {
+                                let target_channel = r.find();
+                            }
+                            _ => {
+                                println!("default resp");
+                                channel.sender.send(v);
+                            }
+                        }
+                    }
+                    Err(_) => {}
+                }
+            })
+        }
+    }
+
+    #[test]
+    pub fn test_create_runner() {
+        let _ = IsolateRunner::new(TestIsolate {});
+    }
+
+    #[test]
+    pub fn test_spawn_worker() {
+        let mut runner = IsolateRunner::new(TestIsolate {});
+
+        let channel = runner.spawn().unwrap();
+        channel.sender.send(TestIsolateEvent::Open).unwrap();
+        let output = channel.receiver.recv().unwrap();
+
+        match output {
+            TestIsolateEvent::Open => {}
+            _ => unreachable!()
+        }
+    }
+
+    #[test]
+    pub fn test_halt_runner() {
+        let mut runner = IsolateRunner::new(TestIsolate {});
+
+        let channel = runner.spawn().unwrap();
+        channel.sender.send(TestIsolateEvent::Open).unwrap();
+
+        runner.halt();
+    }
+
+    #[test]
+    pub fn test_broadcast() {
+        let mut runner = IsolateRunner::new(TestIsolate {});
+        let channel1 = runner.spawn().unwrap();
+        let channel2 = runner.spawn().unwrap();
+
+        runner.broadcast(TestIsolateEvent::Open);
+
+        let output = channel1.receiver.recv().unwrap();
+        match output {
+            TestIsolateEvent::Open => {}
+            _ => unreachable!()
+        }
+
+        let output = channel2.receiver.recv().unwrap();
+        match output {
+            TestIsolateEvent::Open => {}
+            _ => unreachable!()
+        }
+    }
+
+    #[test]
+    pub fn test_peer_to_peer() {
+        let mut runner = IsolateRunner::new(TestIsolate {});
+        let channel1 = runner.spawn().unwrap();
+        let channel2 = runner.spawn().unwrap();
+
+        channel1.sender.send(TestIsolateEvent::Who).unwrap();
+        let id = channel1.receiver.recv().unwrap();
+        println!("Resp: {:?}", id);
+        match id {
+            TestIsolateEvent::Identity(i) => {
+                channel2.sender.send(TestIsolateEvent::Peer(i)).unwrap();
+                let output = channel1.receiver.recv().unwrap();
+                match output {
+                    TestIsolateEvent::PeerGot => {}
+                    _ => unreachable!()
+                }
+            }
+            _ => unreachable!()
+        }
+    }
 }
