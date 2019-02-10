@@ -14,31 +14,33 @@ use std::sync::Mutex;
 use std::default::Default;
 use crate::isolate_runtime::isolate_runtime_shared::IsolateRuntimeShared;
 use crate::IsolateRuntimeRef;
+use std::mem;
+use std::collections::HashMap;
 
 pub struct IsolateRef<T: Send + 'static> {
     channel: IsolateChannel<T>,
     handle: JoinHandle<()>,
 }
 
-pub struct IsolateRunner<T: Clone + Send + 'static> {
+pub struct IsolateRunner<T: Send + 'static> {
     isolate: Box<Isolate<T> + 'static>,
     shared: Arc<Mutex<IsolateRuntimeShared<T>>>,
 }
 
 
-impl<T: Clone + Send + 'static> IsolateRunner<T> {
+impl<T: Send + 'static> IsolateRunner<T> {
     /// Create a new runner with a specific isolate instance
     pub fn new(isolate: impl Isolate<T> + 'static) -> IsolateRunner<T> {
         IsolateRunner {
             isolate: Box::new(isolate),
-            shared: IsolateRuntimeShared::<T, TState>::new(),
+            shared: IsolateRuntimeShared::<T>::new(),
         }
     }
 
     /// Spawn a new isolate worker thread and run it
     pub fn spawn(&mut self) -> Result<IsolateChannel<T>, IsolateRuntimeError> {
         match self.shared.lock() {
-            Ok(inner) => {
+            Ok(mut inner) => {
                 let (ref_channel, worker_channel) = IsolateChannel::<T>::new();
 
                 // Handle worker
@@ -62,8 +64,10 @@ impl<T: Clone + Send + 'static> IsolateRunner<T> {
     /// Halt this runner and wait for all its workers to shutdown
     pub fn halt(self) {
         match self.shared.lock() {
-            Ok(inner) => {
-                inner.refs.into_iter().for_each(|(_, r)| {
+            Ok(mut inner) => {
+                let mut refs = HashMap::new();
+                mem::swap(&mut refs, &mut inner.refs);
+                refs.into_iter().for_each(|(_, r)| {
                     r.channel.close();
                     r.handle.join();
                 });
@@ -83,7 +87,7 @@ mod tests {
 
     struct TestIsolate {}
 
-    #[derive(Debug, Clone)]
+    #[derive(Debug)]
     enum TestIsolateEvent {
         Open,
         Who,
@@ -94,7 +98,7 @@ mod tests {
     }
 
     impl Isolate<TestIsolateEvent> for TestIsolate {
-        fn spawn(&self, identity: IsolateIdentity, channel: IsolateChannel<TestIsolateEvent>, runtime: IsolateRuntimeRef) -> Box<Fn() + Send + 'static> {
+        fn spawn(&self, identity: IsolateIdentity, channel: IsolateChannel<TestIsolateEvent>, runtime: IsolateRuntimeRef<TestIsolateEvent>) -> Box<Fn() + Send + 'static> {
             Box::new(move || {
                 match channel.receiver.recv() {
                     Ok(v) => {

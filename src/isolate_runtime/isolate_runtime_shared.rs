@@ -5,11 +5,11 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::Mutex;
 
-pub struct IsolateRuntimeShared<T: Clone + Send + 'static> {
+pub struct IsolateRuntimeShared<T: Send + 'static> {
     pub refs: HashMap<IsolateIdentity, IsolateRef<T>>,
 }
 
-impl<T: Clone + Send + 'static> IsolateRuntimeShared<T> {
+impl<T: Send + 'static> IsolateRuntimeShared<T> {
     pub fn new() -> Arc<Mutex<IsolateRuntimeShared<T>>> {
         Arc::new(Mutex::new(IsolateRuntimeShared {
             refs: HashMap::new(),
