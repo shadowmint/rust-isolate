@@ -1,16 +1,18 @@
 use crate::IsolateIdentity;
 use crate::isolate_runtime::IsolateRef;
+use std::default::Default;
+use std::collections::HashMap;
+use std::sync::Arc;
+use std::sync::Mutex;
 
-pub struct IsolateRuntimeSharedState<T: Clone + Send + 'static, TState: Default + Send + 'static> {
-    refs: HashMap<IsolateIdentity, IsolateRef<T>>,
-    state: TState,
+pub struct IsolateRuntimeShared<T: Clone + Send + 'static> {
+    pub refs: HashMap<IsolateIdentity, IsolateRef<T>>,
 }
 
-impl<T: Clone + Send + 'static, TState: Default + Send + 'static> IsolateRuntimeSharedState<T, TState> {
-    pub fn new() -> Arc<Mutex<IsolateRuntimeSharedState<T, TState>>> {
-        Arc::new(Mutex::new(IsolateRuntimeSharedState {
+impl<T: Clone + Send + 'static> IsolateRuntimeShared<T> {
+    pub fn new() -> Arc<Mutex<IsolateRuntimeShared<T>>> {
+        Arc::new(Mutex::new(IsolateRuntimeShared {
             refs: HashMap::new(),
-            state: Default::default(),
         }))
     }
 }

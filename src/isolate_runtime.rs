@@ -1,61 +1,75 @@
 pub(crate) mod isolate_identity;
 pub(crate) mod isolate_runtime_error;
 pub(crate) mod isolate_runtime_shared;
+pub(crate) mod isolate_runtime_ref;
 
 use crate::IsolateIdentity;
-use std::any::Any;
 use crate::Isolate;
 use crate::IsolateChannel;
 use crate::IsolateRuntimeError;
 use std::thread;
 use std::thread::JoinHandle;
-use std::collections::HashMap;
-use crate::isolate_runtime::IsolateRuntime;
+use std::sync::Arc;
+use std::sync::Mutex;
+use std::default::Default;
+use crate::isolate_runtime::isolate_runtime_shared::IsolateRuntimeShared;
+use crate::IsolateRuntimeRef;
 
 pub struct IsolateRef<T: Send + 'static> {
     channel: IsolateChannel<T>,
     handle: JoinHandle<()>,
 }
 
-pub struct IsolateRunner<T: Send + 'static, TState: Send + 'static> {
+pub struct IsolateRunner<T: Clone + Send + 'static> {
     isolate: Box<Isolate<T> + 'static>,
-    shared: Arc<Mutex<IsolateRuntimeSharedState<TState>>>,
+    shared: Arc<Mutex<IsolateRuntimeShared<T>>>,
 }
 
 
-impl<T: Clone + Send + 'static, TState: Send + 'static> IsolateRunner<T, TState> {
+impl<T: Clone + Send + 'static> IsolateRunner<T> {
     /// Create a new runner with a specific isolate instance
-    pub fn new(isolate: impl Isolate<T> + 'static) -> IsolateRunner<T, TState> {
+    pub fn new(isolate: impl Isolate<T> + 'static) -> IsolateRunner<T> {
         IsolateRunner {
             isolate: Box::new(isolate),
-            shared: IsolateRuntimeSharedState::<TState>::new(),
+            shared: IsolateRuntimeShared::<T, TState>::new(),
         }
     }
 
     /// Spawn a new isolate worker thread and run it
     pub fn spawn(&mut self) -> Result<IsolateChannel<T>, IsolateRuntimeError> {
-        let (ref_channel, worker_channel) = IsolateChannel::<T>::new();
+        match self.shared.lock() {
+            Ok(inner) => {
+                let (ref_channel, worker_channel) = IsolateChannel::<T>::new();
 
-        // Handle worker
-        let worker_identity = IsolateIdentity::new();
-        let worker = self.isolate.spawn(worker_identity.clone(), worker_channel, &self.runtime);
-        let handle = thread::spawn(move || {
-            (worker)();
-        });
+                // Handle worker
+                let worker_identity = IsolateIdentity::new();
+                let worker_ref = IsolateRuntimeRef::new(self.shared.clone());
+                let worker = self.isolate.spawn(worker_identity.clone(), worker_channel, worker_ref);
+                let handle = thread::spawn(move || {
+                    (worker)();
+                });
 
-        // Keep reference
-        let consumer_channel = ref_channel.clone().unwrap();
-        self.refs.insert(worker_identity, IsolateRef { channel: ref_channel, handle });
+                // Keep reference
+                let consumer_channel = ref_channel.clone().unwrap();
+                inner.refs.insert(worker_identity, IsolateRef { channel: ref_channel, handle });
 
-        return Ok(consumer_channel);
+                return Ok(consumer_channel);
+            }
+            Err(_) => Err(IsolateRuntimeError::InternalSyncError)
+        }
     }
 
     /// Halt this runner and wait for all its workers to shutdown
     pub fn halt(self) {
-        self.refs.into_iter().for_each(|(_, r)| {
-            r.channel.close();
-            r.handle.join();
-        });
+        match self.shared.lock() {
+            Ok(inner) => {
+                inner.refs.into_iter().for_each(|(_, r)| {
+                    r.channel.close();
+                    r.handle.join();
+                });
+            }
+            Err(_) => {}
+        }
     }
 }
 
@@ -65,6 +79,7 @@ mod tests {
     use crate::Isolate;
     use crate::IsolateChannel;
     use crate::IsolateIdentity;
+    use crate::IsolateRuntimeRef;
 
     struct TestIsolate {}
 
@@ -79,8 +94,7 @@ mod tests {
     }
 
     impl Isolate<TestIsolateEvent> for TestIsolate {
-        fn spawn(&self, identity: IsolateIdentity, channel: IsolateChannel<TestIsolateEvent>, runtime: &IsolateRuntime) -> Box<Fn() + Send + 'static> {
-            let r = runtime.clone();
+        fn spawn(&self, identity: IsolateIdentity, channel: IsolateChannel<TestIsolateEvent>, runtime: IsolateRuntimeRef) -> Box<Fn() + Send + 'static> {
             Box::new(move || {
                 match channel.receiver.recv() {
                     Ok(v) => {
@@ -91,7 +105,8 @@ mod tests {
                                 channel.sender.send(TestIsolateEvent::Identity(identity));
                             }
                             TestIsolateEvent::Peer(id) => {
-                                let target_channel = r.find();
+                                // TODO
+                                // let target_channel = r.find();
                             }
                             _ => {
                                 println!("default resp");
@@ -132,27 +147,6 @@ mod tests {
         channel.sender.send(TestIsolateEvent::Open).unwrap();
 
         runner.halt();
-    }
-
-    #[test]
-    pub fn test_broadcast() {
-        let mut runner = IsolateRunner::new(TestIsolate {});
-        let channel1 = runner.spawn().unwrap();
-        let channel2 = runner.spawn().unwrap();
-
-        runner.broadcast(TestIsolateEvent::Open);
-
-        let output = channel1.receiver.recv().unwrap();
-        match output {
-            TestIsolateEvent::Open => {}
-            _ => unreachable!()
-        }
-
-        let output = channel2.receiver.recv().unwrap();
-        match output {
-            TestIsolateEvent::Open => {}
-            _ => unreachable!()
-        }
     }
 
     #[test]

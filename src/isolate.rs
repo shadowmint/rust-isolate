@@ -1,11 +1,11 @@
 use crate::IsolateChannel;
 use crate::IsolateIdentity;
-use crate::isolate_runtime::IsolateRuntime;
+use crate::IsolateRuntimeRef;
 
 /// Isolate the isolate worker that is run in its own thread to process tasks.
 pub trait Isolate<T: Send + 'static> {
     /// Spawn is invoked when a new connection is opened to the isolate.
     /// It should return a function that can be invoked in a remote thread.
     /// The spawn function should handle incoming events on the channel until it closes.
-    fn spawn(&self, identity: IsolateIdentity, channel: IsolateChannel<T>, runtime: &IsolateRuntime) -> Box<Fn() + Send + 'static>;
+    fn spawn(&self, identity: IsolateIdentity, channel: IsolateChannel<T>, runtime: IsolateRuntimeRef<T>) -> Box<Fn() + Send + 'static>;
 }

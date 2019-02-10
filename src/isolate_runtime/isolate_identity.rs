@@ -1,5 +1,4 @@
 use uuid::Uuid;
-use std::hash::Hash;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
 pub struct IsolateIdentity {
