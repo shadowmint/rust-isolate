@@ -6,6 +6,7 @@ use crate::IsolateRuntimeError;
 use std::thread;
 use std::thread::JoinHandle;
 use std::collections::HashMap;
+use crate::isolate_runtime::IsolateRuntime;
 
 pub struct IsolateRef<T: Send + 'static> {
     channel: IsolateChannel<T>,
@@ -16,15 +17,17 @@ pub struct IsolateRunner<T: Send + 'static> {
     identity: IsolateIdentity,
     isolate: Box<Isolate<T> + 'static>,
     refs: HashMap<IsolateIdentity, IsolateRef<T>>,
+    runtime: IsolateRuntime,
 }
 
 impl<T: Clone + Send + 'static> IsolateRunner<T> {
     /// Create a new runner with a specific isolate instance
-    pub fn new(isolate: impl Isolate<T> + 'static) -> IsolateRunner<T> {
+    pub fn new(runtime: IsolateRuntime, isolate: impl Isolate<T> + 'static) -> IsolateRunner<T> {
         IsolateRunner {
             identity: IsolateIdentity::new(),
             isolate: Box::new(isolate),
             refs: HashMap::new(),
+            runtime,
         }
     }
 
@@ -34,7 +37,7 @@ impl<T: Clone + Send + 'static> IsolateRunner<T> {
 
         // Handle worker
         let worker_identity = IsolateIdentity::new();
-        let worker = self.isolate.spawn(worker_identity, worker_channel);
+        let worker = self.isolate.spawn(worker_identity, worker_channel, &self.runtime);
         let handle = thread::spawn(move || {
             (worker)();
         });
@@ -44,16 +47,6 @@ impl<T: Clone + Send + 'static> IsolateRunner<T> {
         self.refs.insert(worker_identity, IsolateRef { channel: ref_channel, handle });
 
         return Ok(consumer_channel);
-    }
-
-    /// Publish a message to a specific worker
-    pub fn publish(&self, target: Option<IsolateIdentity>, message: T) {}
-
-    /// Publish a message to all workers
-    pub fn broadcast(&self, message: T) {
-        self.refs.iter().for_each(|(_, r)| {
-            r.channel.sender.send(message.clone());
-        });
     }
 
     /// Halt this runner and wait for all its workers to shutdown
@@ -71,6 +64,7 @@ mod tests {
     use crate::Isolate;
     use crate::IsolateChannel;
     use crate::IsolateIdentity;
+    use crate::isolate_runtime::IsolateRuntime;
 
     struct TestIsolate {}
 
@@ -85,7 +79,8 @@ mod tests {
     }
 
     impl Isolate<TestIsolateEvent> for TestIsolate {
-        fn spawn(&self, identity: IsolateIdentity, channel: IsolateChannel<TestIsolateEvent>) -> Box<Fn() + Send + 'static> {
+        fn spawn(&self, identity: IsolateIdentity, channel: IsolateChannel<TestIsolateEvent>, runtime: &IsolateRuntime) -> Box<Fn() + Send + 'static> {
+            let r = runtime.clone();
             Box::new(move || {
                 match channel.receiver.recv() {
                     Ok(v) => {
@@ -95,7 +90,9 @@ mod tests {
                                 println!("Identity resp?");
                                 channel.sender.send(TestIsolateEvent::Identity(identity));
                             }
-                            TestIsolateEvent::Peer(id) => {}
+                            TestIsolateEvent::Peer(id) => {
+                                let target_channel = r.find();
+                            }
                             _ => {
                                 println!("default resp");
                                 channel.sender.send(v);
@@ -110,12 +107,12 @@ mod tests {
 
     #[test]
     pub fn test_create_runner() {
-        let _ = IsolateRunner::new(TestIsolate {});
+        let _ = IsolateRunner::new(IsolateRuntime::new(), TestIsolate {});
     }
 
     #[test]
     pub fn test_spawn_worker() {
-        let mut runner = IsolateRunner::new(TestIsolate {});
+        let mut runner = IsolateRunner::new(IsolateRuntime::new(), TestIsolate {});
 
         let channel = runner.spawn().unwrap();
         channel.sender.send(TestIsolateEvent::Open).unwrap();
@@ -129,7 +126,7 @@ mod tests {
 
     #[test]
     pub fn test_halt_runner() {
-        let mut runner = IsolateRunner::new(TestIsolate {});
+        let mut runner = IsolateRunner::new(IsolateRuntime::new(), TestIsolate {});
 
         let channel = runner.spawn().unwrap();
         channel.sender.send(TestIsolateEvent::Open).unwrap();
@@ -139,7 +136,7 @@ mod tests {
 
     #[test]
     pub fn test_broadcast() {
-        let mut runner = IsolateRunner::new(TestIsolate {});
+        let mut runner = IsolateRunner::new(IsolateRuntime::new(), TestIsolate {});
         let channel1 = runner.spawn().unwrap();
         let channel2 = runner.spawn().unwrap();
 
@@ -160,7 +157,7 @@ mod tests {
 
     #[test]
     pub fn test_peer_to_peer() {
-        let mut runner = IsolateRunner::new(TestIsolate {});
+        let mut runner = IsolateRunner::new(IsolateRuntime::new(), TestIsolate {});
         let channel1 = runner.spawn().unwrap();
         let channel2 = runner.spawn().unwrap();
 
