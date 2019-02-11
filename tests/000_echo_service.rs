@@ -1,12 +1,8 @@
-// TODO: Example that just returns incoming messages
-
 use rust_isolate::Isolate;
 use rust_isolate::IsolateIdentity;
 use rust_isolate::IsolateChannel;
 use rust_isolate::IsolateRuntimeRef;
 use rust_isolate::IsolateRuntime;
-use std::sync::Arc;
-use std::sync::Mutex;
 use std::thread;
 
 struct EchoService {}
@@ -29,6 +25,7 @@ impl Isolate<String> for EchoService {
     }
 }
 
+#[test]
 pub fn main() {
     let mut runtime = IsolateRuntime::new(EchoService {});
 

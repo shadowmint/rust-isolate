@@ -1,6 +1,5 @@
 use crate::IsolateIdentity;
 use crate::isolate_runtime::IsolateRef;
-use std::default::Default;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::Mutex;

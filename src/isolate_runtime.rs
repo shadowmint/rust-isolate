@@ -11,7 +11,6 @@ use std::thread;
 use std::thread::JoinHandle;
 use std::sync::Arc;
 use std::sync::Mutex;
-use std::default::Default;
 use crate::isolate_runtime::isolate_runtime_shared::IsolateRuntimeShared;
 use crate::IsolateRuntimeRef;
 use std::mem;
@@ -73,7 +72,7 @@ impl<T: Send + 'static> IsolateRuntime<T> {
                 mem::swap(&mut refs, &mut inner.refs);
                 refs.into_iter().for_each(|(_, r)| {
                     r.channel.close();
-                    r.handle.join();
+                    let _ = r.handle.join();
                 });
             }
             Err(_) => {}
@@ -108,14 +107,15 @@ mod tests {
                         Ok(v) => {
                             match v {
                                 TestIsolateEvent::Who => {
-                                    channel.sender.send(TestIsolateEvent::Identity(identity));
+                                    channel.sender.send(TestIsolateEvent::Identity(identity)).unwrap();
                                 }
                                 TestIsolateEvent::Peer(id) => {
                                     let target = runtime.find(id).unwrap();
                                     target.sender.send(TestIsolateEvent::PeerGot).unwrap();
                                 }
                                 _ => {
-                                    channel.sender.send(v);
+                                    // Ignore send errors; the connections may be broken by the tests.
+                                    let _ = channel.sender.send(v);
                                 }
                             }
                         }
@@ -166,11 +166,11 @@ mod tests {
 
         let channel = runner.spawn().unwrap();
 
-        for i in 1..20 {
+        for _ in 1..20 {
             channel.sender.send(TestIsolateEvent::Echo).unwrap();
         }
 
-        for i in 1..20 {
+        for _ in 1..20 {
             let response = channel.receiver.recv();
             let output = response.unwrap();
             match output {

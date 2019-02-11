@@ -68,7 +68,7 @@ mod tests {
     #[test]
     pub fn test_cant_clone_closed_channel() {
         let (a, b) = IsolateChannel::<String>::new();
-        let c = a.clone().unwrap();
+        a.clone().unwrap();
 
         a.close();
         assert!(b.clone().is_none());
