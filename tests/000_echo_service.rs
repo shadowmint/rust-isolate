@@ -8,7 +8,7 @@ use std::thread;
 struct EchoService {}
 
 impl Isolate<String> for EchoService {
-    fn spawn(&self, _: IsolateIdentity, channel: IsolateChannel<String>, _: IsolateRuntimeRef<String>) -> Box<Fn() + Send + 'static> {
+    fn spawn(&self, _: IsolateIdentity, channel: IsolateChannel<String>, _: IsolateRuntimeRef<String>) -> Box<FnMut() + Send + 'static> {
         Box::new(move || {
             loop {
                 match channel.receiver.recv() {

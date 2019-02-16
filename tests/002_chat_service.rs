@@ -47,7 +47,7 @@ impl ChatService {
 }
 
 impl Isolate<ChatMessage> for ChatService {
-    fn spawn(&self, identity: IsolateIdentity, channel: IsolateChannel<ChatMessage>, runtime: IsolateRuntimeRef<ChatMessage>) -> Box<Fn() + Send + 'static> {
+    fn spawn(&self, identity: IsolateIdentity, channel: IsolateChannel<ChatMessage>, runtime: IsolateRuntimeRef<ChatMessage>) -> Box<FnMut() + Send + 'static> {
         let server = self.server.clone();
         Box::new(move || {
             {

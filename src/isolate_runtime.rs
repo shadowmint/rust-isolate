@@ -44,7 +44,7 @@ impl<T: Send + 'static> IsolateRuntime<T> {
 
                 // Handle worker
                 let worker_identity = IsolateIdentity::new();
-                let worker = self.isolate.spawn(worker_identity.clone(), worker_channel, self.as_ref());
+                let mut worker = self.isolate.spawn(worker_identity.clone(), worker_channel, self.as_ref());
                 let handle = thread::spawn(move || {
                     (worker)();
                 });
@@ -100,7 +100,7 @@ mod tests {
     }
 
     impl Isolate<TestIsolateEvent> for TestIsolate {
-        fn spawn(&self, identity: IsolateIdentity, channel: IsolateChannel<TestIsolateEvent>, runtime: IsolateRuntimeRef<TestIsolateEvent>) -> Box<Fn() + Send + 'static> {
+        fn spawn(&self, identity: IsolateIdentity, channel: IsolateChannel<TestIsolateEvent>, runtime: IsolateRuntimeRef<TestIsolateEvent>) -> Box<FnMut() + Send + 'static> {
             Box::new(move || {
                 loop {
                     match channel.receiver.recv() {
