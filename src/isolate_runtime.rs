@@ -22,14 +22,14 @@ pub struct IsolateRef<T: Send + 'static> {
 }
 
 pub struct IsolateRuntime<T: Send + 'static> {
-    isolate: Box<Isolate<T> + 'static>,
+    isolate: Box<Isolate<T> + Send + 'static>,
     shared: Arc<Mutex<IsolateRuntimeShared<T>>>,
 }
 
 
 impl<T: Send + 'static> IsolateRuntime<T> {
     /// Create a new runner with a specific isolate instance
-    pub fn new(isolate: impl Isolate<T> + 'static) -> IsolateRuntime<T> {
+    pub fn new(isolate: impl Isolate<T> + Send + 'static) -> IsolateRuntime<T> {
         IsolateRuntime {
             isolate: Box::new(isolate),
             shared: IsolateRuntimeShared::<T>::new(),
