@@ -3,6 +3,7 @@ use std::sync::Mutex;
 use crate::isolate_runtime::isolate_runtime_shared::IsolateRuntimeShared;
 use crate::IsolateIdentity;
 use crate::IsolateChannel;
+use crate::IsolateRuntimeError;
 
 pub struct IsolateRuntimeRef<T: Send + 'static> {
     shared: Arc<Mutex<IsolateRuntimeShared<T>>>,
@@ -15,15 +16,27 @@ impl<T: Send + 'static> IsolateRuntimeRef<T> {
         }
     }
 
-    pub fn find(&self, identity: IsolateIdentity) -> Option<IsolateChannel<T>> {
+    pub fn find(&self, identity: &IsolateIdentity) -> Option<IsolateChannel<T>> {
         match self.shared.lock() {
             Ok(inner) => {
-                match inner.refs.get(&identity) {
+                match inner.refs.get(identity) {
                     Some(r) => r.channel.clone(),
                     None => None
                 }
             }
             Err(_) => None
         }
+    }
+
+    /// Spawn a new isolate worker thread and run it
+    pub fn spawn(&mut self) -> Result<IsolateChannel<T>, IsolateRuntimeError> {
+        match self.shared.lock() {
+            Ok(mut inner) => Ok(inner.spawn()),
+            Err(_) => Err(IsolateRuntimeError::InternalSyncError)
+        }
+    }
+
+    fn as_ref(&self) -> IsolateRuntimeRef<T> {
+        return IsolateRuntimeRef::new(self.shared.clone());
     }
 }

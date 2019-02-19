@@ -1,15 +1,15 @@
 use rust_isolate::Isolate;
 use rust_isolate::IsolateIdentity;
 use rust_isolate::IsolateChannel;
-use rust_isolate::IsolateRuntimeRef;
 use rust_isolate::IsolateRuntime;
+use rust_isolate::IsolateRuntimeWait;
 use std::thread;
 use std::time::Duration;
 
 struct PingService {}
 
 impl Isolate<String> for PingService {
-    fn spawn(&self, _: IsolateIdentity, channel: IsolateChannel<String>, _: IsolateRuntimeRef<String>) -> Box<FnMut() + Send + 'static> {
+    fn spawn(&self, _: IsolateIdentity, channel: IsolateChannel<String>) -> Box<FnMut() + Send + 'static> {
         Box::new(move || {
             loop {
                 match channel.receiver.recv_timeout(Duration::from_millis(100)) {

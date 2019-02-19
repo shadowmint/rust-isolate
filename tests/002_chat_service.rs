@@ -1,13 +1,14 @@
 use rust_isolate::Isolate;
 use rust_isolate::IsolateIdentity;
 use rust_isolate::IsolateChannel;
-use rust_isolate::IsolateRuntimeRef;
-use rust_isolate::IsolateRuntime;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::collections::HashMap;
 use std::time::Duration;
 use std::thread;
+use rust_isolate::IsolateRegistry;
+use rust_isolate::IsolateRegistryRef;
+
 
 #[derive(Debug)]
 enum ChatMessage {
@@ -35,24 +36,28 @@ impl ChatServer {
 }
 
 struct ChatService {
-    pub server: Arc<Mutex<ChatServer>>
+    pub registry: IsolateRegistryRef,
+    pub server: Arc<Mutex<ChatServer>>,
 }
 
 impl ChatService {
-    pub fn new() -> ChatService {
+    pub fn new(registry: IsolateRegistryRef) -> ChatService {
         ChatService {
-            server: Arc::new(Mutex::new(ChatServer::new()))
+            registry,
+            server: Arc::new(Mutex::new(ChatServer::new())),
         }
     }
 }
 
 impl Isolate<ChatMessage> for ChatService {
-    fn spawn(&self, identity: IsolateIdentity, channel: IsolateChannel<ChatMessage>, runtime: IsolateRuntimeRef<ChatMessage>) -> Box<FnMut() + Send + 'static> {
+    fn spawn(&self, identity: IsolateIdentity, channel: IsolateChannel<ChatMessage>) -> Box<FnMut() + Send + 'static> {
         let server = self.server.clone();
+        let registry = self.registry.clone();
         Box::new(move || {
             {
                 let mut server_ref = server.lock().unwrap();
-                let self_pointing_channel = runtime.find(identity).unwrap();
+                let runtime = registry.find("Chat").unwrap();
+                let self_pointing_channel = runtime.find(&identity).unwrap();
                 server_ref.connections.insert(identity, self_pointing_channel);
             }
             loop {
@@ -91,7 +96,8 @@ impl Isolate<ChatMessage> for ChatService {
 
 #[test]
 pub fn main() {
-    let mut runtime = IsolateRuntime::new(ChatService::new());
+    let mut registry = IsolateRegistry::new();
+    let mut runtime = registry.bind("Chat", ChatService::new(registry.as_ref())).unwrap();
 
     let c1 = runtime.spawn().unwrap();
     let c2 = runtime.spawn().unwrap();
@@ -121,5 +127,5 @@ pub fn main() {
     c2.sender.send(ChatMessage::Halt).unwrap();
     c3.sender.send(ChatMessage::Halt).unwrap();
 
-    runtime.wait();
+    registry.wait();
 }

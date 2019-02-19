@@ -1,14 +1,14 @@
 use rust_isolate::Isolate;
 use rust_isolate::IsolateIdentity;
 use rust_isolate::IsolateChannel;
-use rust_isolate::IsolateRuntimeRef;
 use rust_isolate::IsolateRuntime;
+use rust_isolate::IsolateRuntimeWait;
 use std::thread;
 
 struct EchoService {}
 
 impl Isolate<String> for EchoService {
-    fn spawn(&self, _: IsolateIdentity, channel: IsolateChannel<String>, _: IsolateRuntimeRef<String>) -> Box<FnMut() + Send + 'static> {
+    fn spawn(&self, _: IsolateIdentity, channel: IsolateChannel<String>) -> Box<FnMut() + Send + 'static> {
         Box::new(move || {
             loop {
                 match channel.receiver.recv() {
