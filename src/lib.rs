@@ -12,3 +12,4 @@ pub use isolate_runtime::isolate_runtime_ref::IsolateRuntimeRef;
 pub use isolate_runtime::isolate_runtime_wait::IsolateRuntimeWait;
 pub use isolate_registry::IsolateRegistry;
 pub use isolate_registry::isolate_registry_ref::IsolateRegistryRef;
+pub use isolate_registry::isolate_registry_error::IsolateRegistryError;
