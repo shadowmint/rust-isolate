@@ -35,8 +35,4 @@ impl<T: Send + 'static> IsolateRuntimeRef<T> {
             Err(_) => Err(IsolateRuntimeError::InternalSyncError)
         }
     }
-
-    fn as_ref(&self) -> IsolateRuntimeRef<T> {
-        return IsolateRuntimeRef::new(self.shared.clone());
-    }
 }

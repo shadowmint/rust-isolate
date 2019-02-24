@@ -4,7 +4,8 @@ use std::fmt;
 
 #[derive(Debug)]
 pub enum IsolateRuntimeError {
-    InternalSyncError
+    InternalSyncError,
+    InvalidIdentity(String)
 }
 
 impl Error for IsolateRuntimeError {}
