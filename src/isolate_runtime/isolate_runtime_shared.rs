@@ -1,10 +1,10 @@
-use crate::IsolateIdentity;
 use crate::isolate_runtime::IsolateRef;
+use crate::Isolate;
+use crate::IsolateChannel;
+use crate::IsolateIdentity;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::Mutex;
-use crate::Isolate;
-use crate::IsolateChannel;
 use std::thread;
 
 pub struct IsolateRuntimeShared<T: Send + 'static> {
@@ -32,8 +32,14 @@ impl<T: Send + 'static> IsolateRuntimeShared<T> {
         });
 
         // Keep reference
-        let consumer_channel = ref_channel.clone().unwrap();
-        self.refs.insert(worker_identity, IsolateRef { channel: ref_channel, handle });
+        let consumer_channel = ref_channel.clone();
+        self.refs.insert(
+            worker_identity,
+            IsolateRef {
+                channel: ref_channel,
+                handle,
+            },
+        );
 
         return consumer_channel;
     }

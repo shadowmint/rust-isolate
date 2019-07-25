@@ -1,14 +1,13 @@
 use rust_isolate::Isolate;
-use rust_isolate::IsolateIdentity;
 use rust_isolate::IsolateChannel;
-use std::sync::Arc;
-use std::sync::Mutex;
-use std::collections::HashMap;
-use std::time::Duration;
-use std::thread;
+use rust_isolate::IsolateIdentity;
 use rust_isolate::IsolateRegistry;
 use rust_isolate::IsolateRegistryRef;
-
+use std::collections::HashMap;
+use std::sync::Arc;
+use std::sync::Mutex;
+use std::thread;
+use std::time::Duration;
 
 #[derive(Debug)]
 enum ChatMessage {
@@ -18,19 +17,21 @@ enum ChatMessage {
 }
 
 struct ChatServer {
-    pub connections: HashMap<IsolateIdentity, IsolateChannel<ChatMessage>>
+    pub connections: HashMap<IsolateIdentity, IsolateChannel<ChatMessage>>,
 }
 
 impl ChatServer {
     pub fn new() -> ChatServer {
         ChatServer {
-            connections: HashMap::new()
+            connections: HashMap::new(),
         }
     }
 
     pub fn broadcast(&self, message: String) {
         self.connections.iter().for_each(|(_, v)| {
-            v.sender.send(ChatMessage::BroadcastMessage(message.clone())).unwrap()
+            v.sender
+                .send(ChatMessage::BroadcastMessage(message.clone()))
+                .unwrap()
         })
     }
 }
@@ -50,7 +51,11 @@ impl ChatService {
 }
 
 impl Isolate<ChatMessage> for ChatService {
-    fn spawn(&self, identity: IsolateIdentity, channel: IsolateChannel<ChatMessage>) -> Box<FnMut() + Send + 'static> {
+    fn spawn(
+        &self,
+        identity: IsolateIdentity,
+        channel: IsolateChannel<ChatMessage>,
+    ) -> Box<FnMut() + Send + 'static> {
         let server = self.server.clone();
         let registry = self.registry.clone();
         Box::new(move || {
@@ -58,7 +63,9 @@ impl Isolate<ChatMessage> for ChatService {
                 let mut server_ref = server.lock().unwrap();
                 let runtime = registry.find("Chat").unwrap();
                 let self_pointing_channel = runtime.find(&identity).unwrap();
-                server_ref.connections.insert(identity, self_pointing_channel);
+                server_ref
+                    .connections
+                    .insert(identity, self_pointing_channel);
             }
             loop {
                 match channel.receiver.recv_timeout(Duration::from_millis(1000)) {
@@ -75,7 +82,10 @@ impl Isolate<ChatMessage> for ChatService {
 
                             // A message back from the broadcaster, to post to the client
                             ChatMessage::BroadcastMessage(s) => {
-                                channel.sender.send(ChatMessage::BroadcastMessage(s)).unwrap();
+                                channel
+                                    .sender
+                                    .send(ChatMessage::BroadcastMessage(s))
+                                    .unwrap();
                             }
                         }
                     }
@@ -97,7 +107,9 @@ impl Isolate<ChatMessage> for ChatService {
 #[test]
 pub fn main() {
     let mut registry = IsolateRegistry::new();
-    let mut runtime = registry.bind("Chat", ChatService::new(registry.as_ref())).unwrap();
+    let mut runtime = registry
+        .bind("Chat", ChatService::new(registry.as_ref()))
+        .unwrap();
 
     let c1 = runtime.spawn().unwrap();
     let c2 = runtime.spawn().unwrap();
@@ -106,21 +118,29 @@ pub fn main() {
     // Wait for all remote threads to startup
     thread::sleep(Duration::from_millis(100));
 
-    c1.sender.send(ChatMessage::NewMessage("Hello World".to_string())).unwrap();
+    c1.sender
+        .send(ChatMessage::NewMessage("Hello World".to_string()))
+        .unwrap();
 
     match c1.receiver.recv().unwrap() {
-        ChatMessage::BroadcastMessage(c) => { assert_eq!("Hello World", c); }
-        _ => unreachable!()
+        ChatMessage::BroadcastMessage(c) => {
+            assert_eq!("Hello World", c);
+        }
+        _ => unreachable!(),
     }
 
     match c2.receiver.recv().unwrap() {
-        ChatMessage::BroadcastMessage(c) => { assert_eq!("Hello World", c); }
-        _ => unreachable!()
+        ChatMessage::BroadcastMessage(c) => {
+            assert_eq!("Hello World", c);
+        }
+        _ => unreachable!(),
     }
 
     match c3.receiver.recv().unwrap() {
-        ChatMessage::BroadcastMessage(c) => { assert_eq!("Hello World", c); }
-        _ => unreachable!()
+        ChatMessage::BroadcastMessage(c) => {
+            assert_eq!("Hello World", c);
+        }
+        _ => unreachable!(),
     }
 
     c1.sender.send(ChatMessage::Halt).unwrap();

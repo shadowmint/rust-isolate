@@ -1,20 +1,20 @@
 pub(crate) mod isolate_identity;
 pub(crate) mod isolate_runtime_error;
-pub(crate) mod isolate_runtime_shared;
 pub(crate) mod isolate_runtime_ref;
+pub(crate) mod isolate_runtime_shared;
 pub(crate) mod isolate_runtime_wait;
 
+use crate::isolate_runtime::isolate_runtime_shared::IsolateRuntimeShared;
+use crate::isolate_runtime::isolate_runtime_wait::IsolateRuntimeWait;
 use crate::Isolate;
 use crate::IsolateChannel;
 use crate::IsolateRuntimeError;
-use std::thread::JoinHandle;
+use crate::IsolateRuntimeRef;
+use std::collections::HashMap;
+use std::mem;
 use std::sync::Arc;
 use std::sync::Mutex;
-use crate::isolate_runtime::isolate_runtime_shared::IsolateRuntimeShared;
-use crate::IsolateRuntimeRef;
-use std::mem;
-use std::collections::HashMap;
-use crate::isolate_runtime::isolate_runtime_wait::IsolateRuntimeWait;
+use std::thread::JoinHandle;
 
 pub struct IsolateRef<T: Send + 'static> {
     channel: IsolateChannel<T>,
@@ -37,7 +37,7 @@ impl<T: Send + 'static> IsolateRuntime<T> {
     pub fn spawn(&mut self) -> Result<IsolateChannel<T>, IsolateRuntimeError> {
         match self.shared.lock() {
             Ok(mut inner) => Ok(inner.spawn()),
-            Err(_) => Err(IsolateRuntimeError::InternalSyncError)
+            Err(_) => Err(IsolateRuntimeError::InternalSyncError),
         }
     }
 
@@ -54,10 +54,13 @@ impl<T: Send + 'static> IsolateRuntimeWait for IsolateRuntime<T> {
             Ok(mut inner) => {
                 let mut refs = HashMap::new();
                 mem::swap(&mut refs, &mut inner.refs);
-                refs.into_iter().for_each(|(_, r)| {
-                    r.channel.close();
-                    let _ = r.handle.join();
-                });
+                refs.into_iter()
+                    .map(|(_, r)| r.handle)
+                    .collect::<Vec<JoinHandle<()>>>() // Drop original references
+                    .into_iter()
+                    .for_each(|h| {
+                        let _ = h.join();
+                    });
             }
             Err(_) => {}
         }
@@ -67,10 +70,10 @@ impl<T: Send + 'static> IsolateRuntimeWait for IsolateRuntime<T> {
 #[cfg(test)]
 mod tests {
     use super::IsolateRuntime;
+    use crate::isolate_runtime::isolate_runtime_wait::IsolateRuntimeWait;
     use crate::Isolate;
     use crate::IsolateChannel;
     use crate::IsolateIdentity;
-    use crate::isolate_runtime::isolate_runtime_wait::IsolateRuntimeWait;
 
     struct TestIsolate {}
 
@@ -82,14 +85,21 @@ mod tests {
     }
 
     impl Isolate<TestIsolateEvent> for TestIsolate {
-        fn spawn(&self, identity: IsolateIdentity, channel: IsolateChannel<TestIsolateEvent>) -> Box<FnMut() + Send + 'static> {
+        fn spawn(
+            &self,
+            identity: IsolateIdentity,
+            channel: IsolateChannel<TestIsolateEvent>,
+        ) -> Box<FnMut() + Send + 'static> {
             Box::new(move || {
                 loop {
                     match channel.receiver.recv() {
                         Ok(v) => {
                             match v {
                                 TestIsolateEvent::Who => {
-                                    channel.sender.send(TestIsolateEvent::Identity(identity)).unwrap();
+                                    channel
+                                        .sender
+                                        .send(TestIsolateEvent::Identity(identity))
+                                        .unwrap();
                                 }
                                 _ => {
                                     // Ignore send errors; the connections may be broken by the tests.
@@ -121,7 +131,7 @@ mod tests {
 
         match output {
             TestIsolateEvent::Echo => {}
-            _ => unreachable!()
+            _ => unreachable!(),
         }
     }
 
@@ -153,7 +163,7 @@ mod tests {
             let output = response.unwrap();
             match output {
                 TestIsolateEvent::Echo => {}
-                _ => unreachable!()
+                _ => unreachable!(),
             }
         }
     }
@@ -175,10 +185,10 @@ mod tests {
                 let output2 = channel2.receiver.recv().unwrap();
                 match output2 {
                     TestIsolateEvent::Echo => {}
-                    _ => unreachable!()
+                    _ => unreachable!(),
                 };
             }
-            _ => unreachable!()
+            _ => unreachable!(),
         }
     }
 }

@@ -1,13 +1,12 @@
+use crate::errors::StatefulError;
 use rust_isolate::Isolate;
-use rust_isolate::IsolateIdentity;
 use rust_isolate::IsolateChannel;
-use rust_isolate::IsolateRuntimeRef;
+use rust_isolate::IsolateIdentity;
 use rust_isolate::IsolateRuntime;
 use rust_isolate::IsolateRuntimeWait;
-use std::thread;
 use std::sync::Arc;
 use std::sync::Mutex;
-use crate::errors::StatefulError;
+use std::thread;
 use std::time::Duration;
 
 // Errors
@@ -51,10 +50,7 @@ struct StatefulService {
 
 impl StatefulService {
     pub fn new(shared: Arc<Mutex<SharedState>>) -> StatefulService {
-        StatefulService {
-            shared,
-            total: 0,
-        }
+        StatefulService { shared, total: 0 }
     }
 
     pub fn dispatch(&mut self, event: StatefulEvent) -> Result<(), StatefulError> {
@@ -69,7 +65,7 @@ impl StatefulService {
                 self.shared.lock().unwrap().global_total -= n as i32;
                 Ok(())
             }
-            Halt => Err(StatefulError::halted())
+            StatefulEvent::Halt => Err(StatefulError::halted()),
         }
     }
 
@@ -77,7 +73,7 @@ impl StatefulService {
         loop {
             let result = match channel.receiver.recv() {
                 Ok(event) => self.dispatch(event),
-                Err(err) => Err(StatefulError::from(err))
+                Err(err) => Err(StatefulError::from(err)),
             };
             if result.is_err() {
                 break;
@@ -87,9 +83,15 @@ impl StatefulService {
 }
 
 impl Isolate<StatefulEvent> for StatefulService {
-    fn spawn(&self, _: IsolateIdentity, channel: IsolateChannel<StatefulEvent>) -> Box<FnMut() + Send + 'static> {
+    fn spawn(
+        &self,
+        _: IsolateIdentity,
+        channel: IsolateChannel<StatefulEvent>,
+    ) -> Box<FnMut() + Send + 'static> {
         let mut instance = self.clone();
-        Box::new(move || { instance.event_loop(&channel); })
+        Box::new(move || {
+            instance.event_loop(&channel);
+        })
     }
 }
 
