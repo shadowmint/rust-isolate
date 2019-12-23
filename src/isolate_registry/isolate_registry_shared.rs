@@ -10,7 +10,7 @@ use std::any::Any;
 use crate::isolate_runtime::isolate_runtime_wait::IsolateRuntimeWait;
 
 pub struct IsolateRegistryShared {
-    registry: HashMap<String, Box<Any + Send + 'static>>
+    registry: HashMap<String, Box<dyn Any + Send + 'static>>
 }
 
 impl IsolateRegistryShared {
@@ -33,7 +33,7 @@ impl IsolateRegistryShared {
         let runtime_ref = runtime.as_ref();
 
         // Attach to the registry
-        self.registry.insert(identity.to_string(), Box::new(runtime) as Box<Any + Send + 'static>);
+        self.registry.insert(identity.to_string(), Box::new(runtime) as Box<dyn Any + Send + 'static>);
         return Ok(runtime_ref);
     }
 
@@ -54,7 +54,7 @@ impl IsolateRegistryShared {
     /// Wait for all runtimes to halt
     pub fn wait(&self) {
         self.registry.iter().for_each(|(_, i)| {
-            match i.downcast_ref::<&IsolateRuntimeWait>() {
+            match i.downcast_ref::<&dyn IsolateRuntimeWait>() {
                 Some(handle) => { handle.wait(); }
                 None => {}
             }

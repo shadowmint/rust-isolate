@@ -10,5 +10,5 @@ pub trait Isolate<T: Send + 'static> {
         &self,
         identity: IsolateIdentity,
         channel: IsolateChannel<T>,
-    ) -> Box<FnMut() + Send + 'static>;
+    ) -> Box<dyn FnMut() + Send + 'static>;
 }

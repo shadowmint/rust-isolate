@@ -87,7 +87,7 @@ impl Isolate<StatefulEvent> for StatefulService {
         &self,
         _: IsolateIdentity,
         channel: IsolateChannel<StatefulEvent>,
-    ) -> Box<FnMut() + Send + 'static> {
+    ) -> Box<dyn FnMut() + Send + 'static> {
         let mut instance = self.clone();
         Box::new(move || {
             instance.event_loop(&channel);

@@ -129,7 +129,7 @@ mod peer {
             &self,
             identity: IsolateIdentity,
             channel: IsolateChannel<PeerEvent>,
-        ) -> Box<FnMut() + Send + 'static> {
+        ) -> Box<dyn FnMut() + Send + 'static> {
             let mut instance = self.clone();
             instance.identity = identity;
             Box::new(move || {
@@ -246,7 +246,7 @@ mod master {
             &self,
             identity: IsolateIdentity,
             channel: IsolateChannel<MasterEvent>,
-        ) -> Box<FnMut() + Send + 'static> {
+        ) -> Box<dyn FnMut() + Send + 'static> {
             let mut instance = self.clone();
             Box::new(move || {
                 channel

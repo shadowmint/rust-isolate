@@ -9,7 +9,7 @@ use std::time::Duration;
 struct PingService {}
 
 impl Isolate<String> for PingService {
-    fn spawn(&self, _: IsolateIdentity, channel: IsolateChannel<String>) -> Box<FnMut() + Send + 'static> {
+    fn spawn(&self, _: IsolateIdentity, channel: IsolateChannel<String>) -> Box<dyn FnMut() + Send + 'static> {
         Box::new(move || {
             loop {
                 match channel.receiver.recv_timeout(Duration::from_millis(100)) {

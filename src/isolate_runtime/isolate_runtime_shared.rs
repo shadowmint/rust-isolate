@@ -9,7 +9,7 @@ use std::thread;
 
 pub struct IsolateRuntimeShared<T: Send + 'static> {
     pub refs: HashMap<IsolateIdentity, IsolateRef<T>>,
-    isolate: Box<Isolate<T> + Send + 'static>,
+    isolate: Box<dyn Isolate<T> + Send + 'static>,
 }
 
 impl<T: Send + 'static> IsolateRuntimeShared<T> {

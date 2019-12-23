@@ -89,7 +89,7 @@ mod tests {
             &self,
             identity: IsolateIdentity,
             channel: IsolateChannel<TestIsolateEvent>,
-        ) -> Box<FnMut() + Send + 'static> {
+        ) -> Box<dyn FnMut() + Send + 'static> {
             Box::new(move || {
                 loop {
                     match channel.receiver.recv() {

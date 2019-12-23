@@ -55,7 +55,7 @@ impl Isolate<ChatMessage> for ChatService {
         &self,
         identity: IsolateIdentity,
         channel: IsolateChannel<ChatMessage>,
-    ) -> Box<FnMut() + Send + 'static> {
+    ) -> Box<dyn FnMut() + Send + 'static> {
         let server = self.server.clone();
         let registry = self.registry.clone();
         Box::new(move || {
