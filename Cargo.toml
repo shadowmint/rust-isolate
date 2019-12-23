@@ -5,7 +5,6 @@ authors = ["Douglas Linder <linderd@iinet.net.au>"]
 edition = "2018"
 
 [dependencies]
-futures = "0.1"
-uuid = {version = "0.7", features = ["v4"]}
-crossbeam = "0.7.1"
-tokio = "0.1"
+uuid = {version = "0.8", features = ["v4"]}
+crossbeam = "0.7.3"
+tokio = "0.2"
