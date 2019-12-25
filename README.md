@@ -2,10 +2,6 @@
 
 Isolated worker processes for rust.
 
-## version
-
-Until this migrates to `std::future` it'll stay pre-1.0.0
-
 ## usage
 
 See the `tests` folder for examples of usage.

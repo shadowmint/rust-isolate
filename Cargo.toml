@@ -1,10 +1,9 @@
 [package]
 name = "rust-isolate"
-version = "0.2.0"
+version = "1.0.0"
 authors = ["Douglas Linder <linderd@iinet.net.au>"]
 edition = "2018"
 
 [dependencies]
 uuid = {version = "0.8", features = ["v4"]}
 crossbeam = "0.7.3"
-tokio = "0.2"
